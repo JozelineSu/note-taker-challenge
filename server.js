@@ -1,6 +1,6 @@
 const express = require('express');
 const path = require('path');
-const fs = require('fs');
+const fs = require('fs').promises;
 const db = require('./db/db.json');
 const uuid = require('./helpers/uuid');
 
@@ -14,7 +14,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
 app.get('/api/notes', (req, res) => {
-    res.json(db.slice(1));
+    res.json(db);
     console.info(`${req.method} request received to get notes`);
 });
 
@@ -30,9 +30,8 @@ app.get('*', (req, res) =>
     res.sendFile(path.join(__dirname, '/public/index.html'))
 );
 
-app.post('/api/notes', (req, res) => {
-    console.info(`${req.method} request recieved to add a note`);
-    const notesArray = [];
+app.post('/api/notes', async (req, res) => {
+    console.info(`${req.method} request received to add a note`);
     const { title, text } = req.body;
 
     if (title && text) {
@@ -41,35 +40,47 @@ app.post('/api/notes', (req, res) => {
             text,
             id: uuid()
         };
-        notesArray.push(newNote);
-    
-    fs.readFile('./db/db.json', 'utf8', (err, data) => {
-        if (err) {
-            console.error(err);
-        } else {
+
+        try {
+            const data = await fs.readFile('./db/db.json', 'utf8');
             const parsedNotes = JSON.parse(data);
 
             parsedNotes.push(newNote);
 
-            fs.writeFileSync(
-                './db/db.json',
-                JSON.stringify(parsedNotes, null, 2),
-                (writeErr) =>
-                writeErr
-                ? console.error(writeErr)
-                : console.info('Succesfully updated notes')
-            );
-        }
-    });
-    const response = {
-        status: 'success',
-        body: newNote,
-    };
+            await fs.writeFile('./db/db.json', JSON.stringify(parsedNotes, null, 2), 'utf8');
 
-    console.log(response);
-    res.status(201).json(response);
+            const response = {
+                status: 'success',
+                body: newNote,
+            };
+
+            console.log(response);
+            res.status(201).json(response);
+        } catch (err) {
+            console.error(err);
+            res.status(500).json('Internal Server Error');
+        }
     } else {
         res.status(500).json('Error in posting note');
+    }
+});
+
+
+app.delete('/api/notes/:id', async (req, res) => {
+    const noteId = req.params.id;
+
+    try {
+        const data = await fs.readFile('./db/db.json', 'utf8');
+        const json = JSON.parse(data);
+
+        const result = json.filter((note) => note.id.toString() !== noteId);
+
+        await fs.writeFile('./db/db.json', JSON.stringify(result, null, 2), 'utf8');
+
+        res.json(`Note ${noteId} has been deleted`);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json('Internal Server Error');
     }
 });
 
