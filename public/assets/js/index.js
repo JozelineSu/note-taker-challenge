@@ -78,8 +78,12 @@ const handleNoteSave = () => {
     text: noteText.value
   };
   saveNote(newNote).then(() => {
+    noteTitle.value = "";
+    noteText.value = "";
     getAndRenderNotes();
     renderActiveNote();
+
+    handleRenderBtns();
   });
 };
 
